@@ -32,22 +32,3 @@ class MLP(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
     
-
-class AEModel(nn.Module):
-    def __init__(
-        self,
-        input_dim: int,
-        hidden_dims: Union[List[int], Tuple[int]],
-        output_dim: Optional[int] = None,
-        activation: nn.Module = nn.ReLU,
-        dropout_rate: Optional[float] = None
-    ) -> None:
-        super().__init__()
-        self.encoder = MLP(input_dim, hidden_dims, output_dim, activation, dropout_rate)
-        self.decoder = MLP(output_dim//2, hidden_dims, input_dim, activation, dropout_rate)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.encoder(x)
-
-    def decode(self, embed):
-        return self.decoder(embed)

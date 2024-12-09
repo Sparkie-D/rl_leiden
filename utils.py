@@ -37,6 +37,10 @@ def load_data(data_dir, dataset_id):
 
     return data, c2cl, dataset_name
 
+def load_data_noeval(data_dir, dataset_name):
+    data = pd.read_csv(os.path.join(data_dir, f'{dataset_name}.csv'), index_col=0)
+    return data, None, dataset_name
+
 
 ''' metrics '''
 def cal1B(truth, pred):

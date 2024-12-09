@@ -1,4 +1,6 @@
+source activate clone
+
 for i in {1..499}
 do
-    python train.py --dataset_id $i
+    python train.py --algo leiden --dataset_id $i
 done
