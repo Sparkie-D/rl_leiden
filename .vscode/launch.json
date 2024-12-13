@@ -11,7 +11,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "python":"${command:python.interpreterPath}",
-            "args": ["--dataset_id", "65"]
+            "args": ["--dataset_id", "17"]
         }
     ]
 }

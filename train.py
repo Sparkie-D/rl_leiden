@@ -28,6 +28,7 @@ def get_args():
     parser.add_argument('--device', type=str, default='cuda:0', help='device')
     parser.add_argument('--eval_mode', action='store_false', default=True)
     parser.add_argument('--data_name', type=str, default=None)
+    parser.add_argument('--remove_non_epi', action='store_true', default=False)
     args = parser.parse_args()
 
     return args
@@ -38,10 +39,11 @@ if __name__ == "__main__":
 
     # init data & logger
     set_seed_everywhere(args.seed)
+    non_epis = None
     if args.eval_mode:
         data, c2cl, dataset_name = load_data(args.data_dir, args.dataset_id)
     else:
-        data, c2cl, dataset_name = load_data_noeval(args.data_dir, args.data_name)
+        data, c2cl, dataset_name, non_epis = load_real_data(args.data_dir, args.data_name, remove_no_epi=args.remove_non_epi)
     log_dir = os.path.join(args.output_dir, args.algo, dataset_name)
     
     # init model & optimizer
@@ -61,6 +63,6 @@ if __name__ == "__main__":
     # make tree
     root = maketree(cnv=data.values, labels=pred_labels, dist_func=l2_distance)
     # showtree(root)
-    drawtree(root, os.path.join(log_dir, 'tree.png'))
     tree_df = pd.DataFrame(data=get_parent_child_pairs(root), columns=['parent', 'son'])
     tree_df.to_csv(os.path.join(log_dir, 'tree_path.csv'), index=None)
+    drawtree(tree_df, os.path.join(log_dir, 'tree.pdf'))

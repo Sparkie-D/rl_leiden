@@ -37,10 +37,17 @@ def load_data(data_dir, dataset_id):
 
     return data, c2cl, dataset_name
 
-def load_data_noeval(data_dir, dataset_name):
-    data = pd.read_csv(os.path.join(data_dir, f'{dataset_name}.csv'), index_col=0)
-    return data, None, dataset_name
-
+def load_real_data(data_dir, dataset_name, remove_no_epi=False):
+    data = pd.read_csv(os.path.join(data_dir, f'{dataset_name}.csv'), index_col=0).T
+    data.index = data.index.str.strip()
+    data_nonepi = None
+    if remove_no_epi:
+        meta_name = dataset_name.split('_')[0] + '_meta'
+        meta = pd.read_csv(os.path.join(data_dir, f'{meta_name}.csv'), index_col=0)
+        non_epis = meta[meta['celltype'] == 'non-Epi'].index
+        data_nonepi = data.loc[non_epis]
+        data.drop(index=non_epis, inplace=True)
+    return data, None, dataset_name, data_nonepi
 
 ''' metrics '''
 def cal1B(truth, pred):
@@ -172,75 +179,14 @@ def get_center(cnv):
     most_vec = mode(cnv, axis=0).mode.flatten()
     return np.array(most_vec)
     
-def maketree(cnv, labels, dist_func=l1_distance, method='MST'):
-    if method == 'UPGMA':
-        return maketree_UPGMA(cnv, labels, dist_func)
-    elif method == 'MST':
-        return maketree_MST(cnv, labels, dist_func)
-        # return maketree_MST_woroot(cnv, labels, dist_func)
-
-def maketree_UPGMA(cnv, labels, dist_func=l1_distance):
-    nodes = [Node(v=get_center(cnv[np.where(labels == label)]), label=label) for label in np.unique(labels)]
-    root_label = get_root_label(cnv, labels)
-    root = get_node(root_label, nodes)
-    
-    nodes_unused = [node for node in nodes if node is not root]
-
-    while len(nodes_unused) > 1:
-        dist_list = sorted([dist_func(root.v, node.v) for node in nodes_unused], reverse=True)
-        nodes_selected = [node for node in nodes_unused if dist_func(node.v, root.v) in dist_list[:3]]
-        if len(nodes_selected) == 2:
-            node1, node2 = nodes_selected
-            if dist_func(node1) >= dist_func(node2):
-                node2.add_offspring(node1)
-                node1.set_parent(node2)
-                nodes_unused.remove(node1)
-            else:
-                node1.add_offspring(node2)
-                node2.set_parent(node1)
-                nodes_unused.remove(node2)
-        else:
-            for items in  product(nodes_selected, nodes_selected, nodes_selected):
-                if len(set(items)) < 3:
-                    continue
-                node1, node2, node3 = items
-                if node1 not in nodes_unused or node2 not in nodes_unused or node3 not in nodes_unused:
-                    continue
-                dist12 = dist_func(node1.v, node2.v)
-                dist13 = dist_func(node1.v, node3.v)
-                dist23 = dist_func(node2.v, node3.v)
-
-                if dist12 >= dist13 and dist12 >= dist23:
-                    node3.add_offspring(node1)
-                    node3.add_offspring(node2)
-                    node1.set_parent(node3)
-                    node2.set_parent(node3)
-                    nodes_unused.remove(node1)
-                    nodes_unused.remove(node2)
-                elif dist13 >= dist12 and dist13 >= dist23:
-                    node2.add_offspring(node1)
-                    node2.add_offspring(node3)
-                    node1.set_parent(node2)
-                    node3.set_parent(node2)
-                    nodes_unused.remove(node1)
-                    nodes_unused.remove(node3)
-                else:
-                    node1.add_offspring(node2)
-                    node1.add_offspring(node3)
-                    node2.set_parent(node1)
-                    node3.set_parent(node1)
-                    nodes_unused.remove(node2)
-                    nodes_unused.remove(node3)
-
-    founder = nodes_unused[0]
-    root.add_offspring(founder)
-    founder.set_parent(root)
-    return root
+def maketree(cnv, labels, dist_func=l1_distance):
+    return maketree_MST(cnv, labels, dist_func)
 
 def maketree_MST(cnv, labels, dist_func=l1_distance):
     nodes = [Node(v=get_center(cnv[np.where(labels == label)]),n=(labels == label).sum(),  label=label) for label in np.unique(labels)]
-    root_label = get_root_label(cnv, labels)
-    root = get_node(root_label, nodes)
+    r_v, r_l = get_root_data(cnv)
+    root = Node(v=r_v, n=cnv.shape[0] // 10, label=r_l)
+    nodes.append(root) # root由虚拟方法构建
 
     nodes_used = [root]
     nodes_unused = [node for node in nodes if node not in nodes_used]
@@ -254,11 +200,10 @@ def maketree_MST(cnv, labels, dist_func=l1_distance):
 
     edges.sort(key=lambda x: x[0])
 
-
     while len(nodes_used) < len(nodes):
         for dist, node1, node2 in edges:
-            # if root in [node1, node2] and len(root.offsprings) > 0 :
-            #     continue # root have only one child founder
+            if root in [node1, node2] and len(root.offsprings) > 0 :
+                continue # root have only one child real root
             if (node1 in nodes_used and node2 not in nodes_used):
                 node1.add_offspring(node2)
                 node2.set_parent(node1)
@@ -272,7 +217,9 @@ def maketree_MST(cnv, labels, dist_func=l1_distance):
                 nodes_unused.remove(node1)
                 break
 
-    return root
+    root_real = root.offsprings[0]
+    root_real.set_parent(None)
+    return root_real
 
 
 def showtree(root):
@@ -292,37 +239,17 @@ def get_parent_child_pairs(root):
     
     return np.array(parent_child_pairs)
 
-def drawtree(root, path=None):
-    def add_edges(graph, node, node_map):
-        for offspring in node.offsprings:
-            graph.add_edge(node.label, offspring.label)
-            node_map[offspring.label] = offspring  # Store the offspring in the node_map
-            add_edges(graph, offspring, node_map)
+def drawtree(tree_path, path=None):
+    df = tree_path
+    G = nx.DiGraph()
+    G.add_edges_from(zip(df['parent'], df['son']))
 
-    graph = nx.DiGraph()
-    node_map = {root.label: root}  # Initialize the mapping with the root node
-    add_edges(graph, root, node_map)
-
-    # Now create node sizes using the node_map to get actual node objects
-    node_sizes = {label: node_map[label].n * 50 for label in graph.nodes}
-
-    pos = nx.nx_agraph.graphviz_layout(graph, prog='dot')
-    # pos = nx.multipartite_layout(graph)
-
-    fig_scale = int(sum(list(node_sizes.values())) / (400 * 50))
-    # fig_scale = 8
-    plt.figure(figsize=(10 * fig_scale, 8 * fig_scale))
-    nx.draw_networkx(
-        graph, pos, with_labels=True, 
-        node_size=[node_sizes.get(n, 100) for n in graph.nodes], 
-        node_color="lightblue", font_size=10, 
-        font_weight="bold", arrows=True
-    )
-    plt.title("Tree Structure")
-    
-    if path is not None:
-        plt.savefig(path)
-    plt.close()
+    # Draw the tree
+    plt.figure(figsize=(10, 8))
+    pos = nx.nx_agraph.graphviz_layout(G, prog='dot')  # Tree layout
+    nx.draw(G, pos, with_labels=True, arrows=False, node_size=1500, node_color="lightblue", font_size=10, font_weight="bold")
+    plt.title("Tree Structure", fontsize=14)
+    plt.savefig(path)
 
 def get_treenodes(root):
     nodes = []
@@ -333,14 +260,26 @@ def get_treenodes(root):
         nodes.append(node)
     return nodes
 
-def get_root_label(cnv, labels):
-    '''
-        need change in real tasks if root is unknown
-    '''
-    # root_label = labels[0]
-    count2 = np.sum(cnv==2, axis=1)
-    root_label = labels[np.argmax(count2)]
-    return root_label
+def calculate_bounds(reference):
+    down = np.mean(reference.mean(axis=1)) - 2 * np.mean(reference.std(axis=1))
+    up = np.mean(reference.mean(axis=1)) + 2 * np.mean(reference.std(axis=1))
+    return down, up
+
+def classify_cnv(data, down, up):
+    cnv_state = np.where(data < down, 1,  # loss of one copy
+                         np.where(data < up, 2,  # neutral
+                                  3))  # gain of one copy
+    return cnv_state
+
+
+
+import numpy as np
+from scipy.stats import mode
+
+def get_root_data(cnv):
+    root_data = mode(cnv, axis=0).mode[0] # 获取每个特征的众数组成虚拟的根
+    return root_data, -1 # 虚拟根的标签为-1
+
 
 def get_founder(root, nodes, dist_func):
     unused = [node for node in nodes if node is not root]

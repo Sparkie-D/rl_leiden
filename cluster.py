@@ -127,6 +127,7 @@ class RLCluster(object):
         return labels
 
     def learn(self, bc_epochs, rl_epochs, samples_per_epoch, epsilon=0.2):
+
         best_labels = self.get_labels(self.pca_results.detach().cpu().numpy())
         best_return = self.get_reward(self.pca_results.detach().cpu().numpy(), best_labels)
         self.logger.add_scalar('train/original_return', best_return, 0)
