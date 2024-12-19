@@ -29,6 +29,7 @@ def get_args():
     parser.add_argument('--eval_mode', action='store_false', default=True)
     parser.add_argument('--data_name', type=str, default=None)
     parser.add_argument('--remove_non_epi', action='store_true', default=False)
+    parser.add_argument('--meta_col', type=str, default=None)
     args = parser.parse_args()
 
     return args
@@ -39,11 +40,12 @@ if __name__ == "__main__":
 
     # init data & logger
     set_seed_everywhere(args.seed)
-    non_epis = None
+    meta = None
     if args.eval_mode:
         data, c2cl, dataset_name = load_data(args.data_dir, args.dataset_id)
+        data = [data]
     else:
-        data, c2cl, dataset_name, non_epis = load_real_data(args.data_dir, args.data_name, remove_no_epi=args.remove_non_epi)
+        data, c2cl, dataset_name, meta = load_real_data(args.data_dir, args.data_name, remove_no_epi=args.remove_non_epi)
     log_dir = os.path.join(args.output_dir, args.algo, dataset_name)
     
     # init model & optimizer
@@ -53,10 +55,13 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # get algorithm
-    rl_cluster = RLCluster(args.algo, data, c2cl, args.n_components, model, optimizer, log_dir, device, eval=args.eval_mode)
+    rl_cluster = RLCluster(args.algo, data, c2cl, args.n_components, model, optimizer, log_dir, device, eval=args.eval_mode, meta=meta, meta_col=args.meta_col)
 
     # learn
     pred_labels = rl_cluster.learn(args.bc_epochs, args.rl_epochs, args.samples_per_epoch, args.epsilon)
+
+    embed_df = pd.DataFrame(rl_cluster.best_embed, index=data.index)
+    embed_df.to_csv(os.path.join(log_dir, 'embeddings.csv'))
 
     label_df = pd.DataFrame({'cell':data.index, 'cluster':pred_labels})
     label_df.to_csv(os.path.join(log_dir, 'cell2cluster.csv'), index=None)

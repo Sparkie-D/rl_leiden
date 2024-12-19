@@ -3,16 +3,15 @@ import pandas as pd
 import os
 
 if __name__ == '__main__':
-    dir1 = '/home/ubuntu/duxinghao/clone/results/1127/leiden/'
-    dir2 = '/home/ubuntu/duxinghao/clone/rl_leiden/results_1203/leiden/'
+    dir1 = '/home/ubuntu/duxinghao/clone/rl_leiden/results/data_large2/leiden/CNV/leiden/'
+    dir2 = '/home/ubuntu/duxinghao/clone/rl_leiden/results/data_large2/rl_leiden/CNV/leiden/'
 
     win, same, lose = 0, 0, 0
     for subdir in os.listdir(dir2):
         if not os.path.isdir(dir1+subdir):
+            print(subdir)
             continue
         id = eval(subdir.split('_')[0])
-        if id > 65:
-            continue
         tar = pd.read_csv(dir1+subdir+'/result.csv', index_col=None)
         tar.columns = [col.replace(' ', '') for col in tar.columns] 
         res = pd.read_csv(dir2+subdir+'/result.csv', index_col=None)

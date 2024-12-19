@@ -43,7 +43,9 @@ class RLCluster(object):
                  optim,
                  log_dir,
                  device,
-                 eval=True
+                 meta,
+                 meta_col,
+                 eval=True,
         ):
         self.algo = algo
         self.adata = ann.AnnData(data.values, obs=np.arange(data.shape[0]), var=np.arange(data.shape[1]), dtype=float)
@@ -62,12 +64,18 @@ class RLCluster(object):
         self.pca_results = self.adata.obsm['X_pca']
         self.pca_results = torch.from_numpy(self.pca_results).float().to(device)
         self.pca_normalizer = Normalizer(self.pca_results)
+
         self.data = torch.from_numpy(data.values).float().to(device)
         self.data = (self.data - self.data.mean(0)) / (self.data.std(0) + 1e-5)
+        self.data_numpy = self.data.detach().cpu().numpy()
         self.model = model
         self.optim = optim
         self.eval_mode = eval
-
+        if meta is not None and meta_col is not None:
+            meta_reset = meta.reset_index()
+            self.grouped_indices = meta_reset.groupby(meta_col).apply(lambda x: x.index.tolist())
+        else:
+            self.grouped_indices = {None:np.arange(self.data.shape[0])}
         self.w1 = 1
         self.w2 = 0
 
@@ -97,8 +105,12 @@ class RLCluster(object):
         return kmeans.labels_
     
     def get_reward(self, embedding, labels):
-        reward = silhouette_score(self.data.detach().cpu().numpy(), labels)
-        return reward
+        ret = 0
+        for group, indices in self.grouped_indices.items():
+            ret += silhouette_score(self.data_numpy[indices], labels[indices])
+        return ret 
+
+
 
     def get_dist(self):
         z = self.model(self.data)
@@ -127,7 +139,7 @@ class RLCluster(object):
         return labels
 
     def learn(self, bc_epochs, rl_epochs, samples_per_epoch, epsilon=0.2):
-
+        self.best_embed = self.pca_results.detach().cpu().numpy()
         best_labels = self.get_labels(self.pca_results.detach().cpu().numpy())
         best_return = self.get_reward(self.pca_results.detach().cpu().numpy(), best_labels)
         self.logger.add_scalar('train/original_return', best_return, 0)
@@ -152,7 +164,7 @@ class RLCluster(object):
             z_dist = self.get_dist()
 
             log_probs, rs, z_samples = [], [], []
-            for i in range(samples_per_epoch):
+            for _ in range(samples_per_epoch):
                 with torch.no_grad():
                     z_sample = z_dist.sample()
 
@@ -169,7 +181,7 @@ class RLCluster(object):
             rs = torch.Tensor(np.array(rs)).to(self.device)
             advantage = rs - rs.mean()
 
-            for i in range(samples_per_epoch):
+            for _ in range(samples_per_epoch):
                 z_dist = self.get_dist()
                 ratio = z_dist.log_prob(z_samples).mean(dim=(1, 2)) / log_probs
                 rl_loss = torch.min(ratio * advantage, ratio.clip(1-epsilon, 1+epsilon) * advantage).mean()
@@ -193,6 +205,7 @@ class RLCluster(object):
             if r > best_return:
                 best_return = r
                 best_labels = labels
+                self.best_embed = embed
                 if self.eval_mode:
                     df = pd.DataFrame.from_dict({k: [v] for k, v in results.items()})
                     df.to_csv(os.path.join(self.log_dir, 'result.csv'))

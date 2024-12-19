@@ -75,8 +75,9 @@ if __name__ == '__main__':
             break
     else:
         quit()
+    type_prefix = args.data_type.split('_')[0]
     clean_mtx, _, dataset_name, _ = load_real_data(args.data_dir, args.data_name, remove_no_epi=args.remove_non_epi)
-    c2c = pd.read_csv(f'/home/ubuntu/duxinghao/clone/rl_leiden/results/{args.task_type}/{args.method}/{args.data_type}/leiden/{args.data_name}_{args.data_type}/cell2cluster.csv')
+    c2c = pd.read_csv(f'/home/ubuntu/duxinghao/clone/rl_leiden/results/{args.task_type}/{args.method}/{args.data_type}/leiden/{args.data_name}_{type_prefix}/cell2cluster.csv')
     c2c.columns = ['parent', 'son']
 
     tree = pd.read_csv(f'/home/ubuntu/duxinghao/clone/rl_leiden/results/{args.task_type}/{args.method}/{args.data_type}/leiden/{args.data_name}_{args.data_type}/tree_path.csv')

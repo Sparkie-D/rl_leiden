@@ -16,3 +16,10 @@ do
     --output_dir results/${task}/rl_leiden/${type} \
     --eval_mode 
 done
+
+python train.py \
+    --data_dir ${datadir} \
+    --data_name concat_${type} \
+    --output_dir results/${task}/rl_leiden/${type} \
+    --eval_mode \
+    --meta_col sample

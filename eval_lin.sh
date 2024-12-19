@@ -1,6 +1,6 @@
 source activate clone
 
-for i in 17 22 26 29 30 39
-do
-    python eval_lineage.py --dataset_id ${i}
-done
+method=rl_leiden
+python eval_sample.py --task_type lineage_trace_data --method ${method} --data_type CNV --data_names concat --meta_columns sample
+python eval_lineage.py --method ${method}
+python eval_lineage.py --method ${method} --concat

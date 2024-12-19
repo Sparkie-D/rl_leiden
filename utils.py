@@ -40,14 +40,16 @@ def load_data(data_dir, dataset_id):
 def load_real_data(data_dir, dataset_name, remove_no_epi=False):
     data = pd.read_csv(os.path.join(data_dir, f'{dataset_name}.csv'), index_col=0).T
     data.index = data.index.str.strip()
-    data_nonepi = None
-    if remove_no_epi:
-        meta_name = dataset_name.split('_')[0] + '_meta'
-        meta = pd.read_csv(os.path.join(data_dir, f'{meta_name}.csv'), index_col=0)
+    meta_name = dataset_name.split('_')[0] + '_meta'
+    meta_path = os.path.join(data_dir, f'{meta_name}.csv')
+    meta = None
+    if os.path.exists(meta_path):
+        meta = pd.read_csv(meta_path, index_col=0)
+    if remove_no_epi and meta is not None:
+        meta.columns = [col.strip() for col in meta.columns]
         non_epis = meta[meta['celltype'] == 'non-Epi'].index
-        data_nonepi = data.loc[non_epis]
         data.drop(index=non_epis, inplace=True)
-    return data, None, dataset_name, data_nonepi
+    return data, None, dataset_name, meta
 
 ''' metrics '''
 def cal1B(truth, pred):
@@ -250,6 +252,7 @@ def drawtree(tree_path, path=None):
     nx.draw(G, pos, with_labels=True, arrows=False, node_size=1500, node_color="lightblue", font_size=10, font_weight="bold")
     plt.title("Tree Structure", fontsize=14)
     plt.savefig(path)
+    
 
 def get_treenodes(root):
     nodes = []
@@ -277,7 +280,7 @@ import numpy as np
 from scipy.stats import mode
 
 def get_root_data(cnv):
-    root_data = mode(cnv, axis=0).mode[0] # 获取每个特征的众数组成虚拟的根
+    root_data = mode(cnv, axis=0).mode[0] # 获取特征的众数组成虚拟的根
     return root_data, -1 # 虚拟根的标签为-1
 
 
