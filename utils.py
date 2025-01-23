@@ -181,8 +181,8 @@ def get_center(cnv):
     most_vec = mode(cnv, axis=0).mode.flatten()
     return np.array(most_vec)
     
-def maketree(cnv, labels, dist_func=l1_distance):
-    return maketree_MST(cnv, labels, dist_func)
+def   maketree(cnv, labels, dist_func=l1_distance):
+    return maketree_MST(cnv, labels.flatten(), dist_func)
 
 def maketree_MST(cnv, labels, dist_func=l1_distance):
     nodes = [Node(v=get_center(cnv[np.where(labels == label)]),n=(labels == label).sum(),  label=label) for label in np.unique(labels)]
@@ -204,8 +204,8 @@ def maketree_MST(cnv, labels, dist_func=l1_distance):
 
     while len(nodes_used) < len(nodes):
         for dist, node1, node2 in edges:
-            if root in [node1, node2] and len(root.offsprings) > 0 :
-                continue # root have only one child real root
+            # if root in [node1, node2] and len(root.offsprings) > 0 :
+            #     continue # root have only one child -> real root
             if (node1 in nodes_used and node2 not in nodes_used):
                 node1.add_offspring(node2)
                 node2.set_parent(node1)
@@ -218,11 +218,26 @@ def maketree_MST(cnv, labels, dist_func=l1_distance):
                 nodes_used.append(node1)
                 nodes_unused.remove(node1)
                 break
+    # root have only one child -> real root
+    # assert len(root.offsprings) == 1
+    # root_real = root.offsprings[0]
+    # root_real.set_parent(None)
+    # return root_real
 
-    root_real = root.offsprings[0]
-    root_real.set_parent(None)
-    return root_real
+    for root_real in root.offsprings:
+        root_real.set_parent(None)
 
+    return root.offsprings
+
+def merge_nodes(nodes):
+    assert sum([0 if node.parent is None else 1 for node in nodes]) == 0 # 只有根能合并
+    new_node = Node(v=0, n=0, label=nodes[0].label)
+    for node in nodes:
+        new_node.n += node.n
+        for offspring in node.offsprings:
+            new_node.add_offspring(offspring)
+            offspring.set_parent(new_node)
+    return new_node
 
 def showtree(root):
     for child in root.offsprings:

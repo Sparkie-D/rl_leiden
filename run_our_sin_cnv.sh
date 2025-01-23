@@ -8,7 +8,7 @@ type=CNV
                                                                                             # task
 # for i in c17 c22 c26 c29 c30 c39                                                            # lineage_trace_data
 # for i in data1 data2 data3 data5 data6 data7                                              # CNV_multiSample_martix
-for i in  SOL003 SOL006 SOL008 SOL012 SOL016 SOL1303 SOL1306 SOL1307 # GSM5276940 GSM5276943 # SingleSample_CNV
+for i in GSM5276940filtered GSM5276943filtered SOL1303filtered SOL1306filtered SOL003filtered SOL006filtered SOL008filtered SOL012filtered SOL016filtered # SingleSample_CNV
 do
     python train.py \
     --data_dir ${datadir} \

@@ -5,12 +5,16 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-def calculate_cluster_distances(data_file, cluster_file, tree_path):
+def calculate_cluster_distances(data_file, cluster_file, tree_path, emb_file, use_emb=False):
     # Step 1: 加载数据
     data = pd.read_csv(data_file, index_col=0).T  # 细胞特征数据
     data.index = data.index.str.strip()
     cluster_df = pd.read_csv(cluster_file, index_col=0)  # 细胞聚类数据
     tree_df = pd.read_csv(tree_path, index_col=0)
+
+    if use_emb:
+        emb_df  = pd.read_csv(emb_file, index_col=0)
+        data = emb_df
     root_label = tree_df.index[0]
 
     # Step 2: 计算根节点特征
@@ -21,11 +25,12 @@ def calculate_cluster_distances(data_file, cluster_file, tree_path):
     labels = np.unique(tree_df.values)
     for label in labels:
         parent = tree_df[tree_df['son'] == label].index[0]
-        parent_v = data[cluster_df['cluster'] == parent].values.mean(axis=0)
+        # parent_v = data[cluster_df['cluster'] == parent].values.mean(axis=0)
         node_df = data[cluster_df['cluster'] == label]
         if not node_df.empty:
             node_v = node_df.values.mean(axis=0)
-            dist = np.sqrt(np.mean(np.square(parent - node_v)))  # 欧氏距离
+            dist = np.sqrt(np.mean(np.square(root_v - node_v)))  # 欧氏距离
+            # dist = np.sqrt(np.mean(np.square(parent_v - node_v)))  # 欧氏距离
             distances[label] = dist
         else:
             distances[label] = np.nan  # 节点没有对应数据
@@ -66,15 +71,17 @@ def drawtree(tree_path, distances, path=None):
 
 if __name__ == '__main__':
     root_dir = '/home/ubuntu/duxinghao/clone'
-    dataset_id = 'oncat'
+    dataset_id = '17'
+    method = 'rl_leiden'
 
     # Example usage:
     data_file = f'{root_dir}/data/lineage_trace_data/c{dataset_id}_CNV.csv'
-    cluster_file = f'{root_dir}/rl_leiden/results/lineage_trace_data/rl_leiden/CNV/leiden/c{dataset_id}_CNV/cell2cluster.csv'
-    tree_path = f'{root_dir}/rl_leiden/results/lineage_trace_data/rl_leiden/CNV/leiden/c{dataset_id}_CNV/tree_path.csv'
+    cluster_file = f'{root_dir}/rl_leiden/results/lineage_trace_data/{method}/CNV/leiden/c{dataset_id}_CNV/cell2cluster.csv'
+    tree_path = f'{root_dir}/rl_leiden/results/lineage_trace_data/{method}/CNV/leiden/c{dataset_id}_CNV/tree_path.csv'
+    emb_file = f'{root_dir}/rl_leiden/results/lineage_trace_data/{method}/CNV/leiden/c{dataset_id}_CNV/embeddings.csv'
 
     # Calculate distances
-    distances = calculate_cluster_distances(data_file, cluster_file, tree_path)
+    distances = calculate_cluster_distances(data_file, cluster_file, tree_path, emb_file, use_emb=False)
 
     # Draw tree with distances
-    drawtree(tree_path, distances, path=f'{root_dir}/rl_leiden/results/lineage_trace_data/rl_leiden/CNV/leiden/c{dataset_id}_CNV/tree_with_dist.pdf')
+    drawtree(tree_path, distances, path=f'{root_dir}/rl_leiden/results/lineage_trace_data/{method}/CNV/leiden/c{dataset_id}_CNV/tree_with_dist.pdf')

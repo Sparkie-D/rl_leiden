@@ -107,7 +107,8 @@ class RLCluster(object):
     def get_reward(self, embedding, labels):
         ret = 0
         for group, indices in self.grouped_indices.items():
-            ret += silhouette_score(self.data_numpy[indices], labels[indices])
+            if len(set(labels[indices])) > 1:
+                ret += silhouette_score(self.data_numpy[indices], labels[indices])
         return ret 
 
 
