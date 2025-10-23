@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import argparse
 
-from utils import get_root_data, maketree, l2_distance, get_parent_child_pairs, drawtree, load_real_data
+from src.utils import get_root_data, maketree, l2_distance, get_parent_child_pairs, drawtree, load_real_data
 
 def replace_outliers_with_median(df):
     df_new = pd.DataFrame(data=df.values, columns=df.columns)

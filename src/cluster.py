@@ -1,6 +1,5 @@
 import os
 import torch
-import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
@@ -8,16 +7,10 @@ import anndata as ann
 import scanpy as sc
 from kneed import KneeLocator
 from tqdm import tqdm
-from utils import cal1B, cal2, cal3
-from sklearn.metrics import adjusted_rand_score as ari_score
-from sklearn.metrics.cluster import normalized_mutual_info_score as nmi_score
-from sklearn.metrics import v_measure_score as vm_score
-from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
+from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
 from torch.utils.tensorboard import SummaryWriter
 
-from scipy.spatial.distance import cdist
-from sklearn.metrics.pairwise import cosine_similarity
-import igraph as ig
+from src.evaluation.evaluate import evaluate
 
 class Normalizer(object):
     def __init__(self, data):
@@ -36,8 +29,11 @@ class Normalizer(object):
 class RLCluster(object):
     def __init__(self, 
                  algo,
+                 tree_method,
                  data, 
                  c2cl, 
+                 gt_tree,
+                 cl2idx,
                  n_comps,
                  model,
                  optim,
@@ -46,13 +42,17 @@ class RLCluster(object):
                  meta,
                  meta_col,
                  eval=True,
+                 reward='sii',
         ):
         self.algo = algo
         self.adata = ann.AnnData(data.values, obs=np.arange(data.shape[0]), var=np.arange(data.shape[1]), dtype=float)
         if eval:
             self.c2cl = c2cl
-            cl2idx = {x:i for i, x in enumerate(set(self.c2cl.clone))}
+            # cl2idx = {x:i for i, x in enumerate(set(self.c2cl.clone))}
+            self.cl2idx = cl2idx
             self.true_labels = self.c2cl.clone.map(cl2idx).values
+            self.true_tree = gt_tree
+            # print(self.true_labels, self.true_tree, self.cl2idx)
         self.cnv_data = data.values
         os.makedirs(f'{log_dir}', exist_ok=True)
 
@@ -78,6 +78,15 @@ class RLCluster(object):
             self.grouped_indices = {None:np.arange(self.data.shape[0])}
         self.w1 = 1
         self.w2 = 0
+        
+        self.tree_method = tree_method
+
+        if reward == 'sii':
+            self.reward_func = silhouette_score
+        elif reward == 'chi':
+            self.reward_func = calinski_harabasz_score
+        elif reward == 'dbi':
+            self.reward_func = davies_bouldin_score
 
     def leiden(self, embed):
         if isinstance(embed, torch.Tensor):
@@ -108,9 +117,8 @@ class RLCluster(object):
         ret = 0
         for group, indices in self.grouped_indices.items():
             if len(set(labels[indices])) > 1:
-                ret += silhouette_score(self.data_numpy[indices], labels[indices])
+                ret += self.reward_func(self.data_numpy[indices], labels[indices])
         return ret 
-
 
 
     def get_dist(self):
@@ -121,14 +129,14 @@ class RLCluster(object):
 
         return z_dist
     
-    def evaluate(self, pred_labels):
-        nmi = nmi_score(self.true_labels, pred_labels, average_method='arithmetic')
-        ari = ari_score(self.true_labels, pred_labels)
-        vm = vm_score(self.true_labels, pred_labels)
-        sc1b = cal1B(truth=len(set(self.true_labels)), pred=len(set(pred_labels)))
-        sc2 = cal2(truth=self.true_labels, pred=pred_labels)
-        sc3 = cal3(truth=self.true_labels, pred=pred_labels, cnv=self.cnv_data)
-        return {'nmi': nmi, 'ari': ari, 'vm': vm, 'sc1b': sc1b, 'sc2': sc2, 'sc3': sc3}
+    # def evaluate(self, pred_labels):
+    #     nmi = nmi_score(self.true_labels, pred_labels, average_method='arithmetic')
+    #     ari = ari_score(self.true_labels, pred_labels)
+    #     vm = vm_score(self.true_labels, pred_labels)
+    #     sc1b = cal1B(truth=len(set(self.true_labels)), pred=len(set(pred_labels)))
+    #     sc2 = cal2(truth=self.true_labels, pred=pred_labels)
+    #     sc3 = cal3(truth=self.true_labels, pred=pred_labels, cnv=self.cnv_data)
+    #     return {'nmi': nmi, 'ari': ari, 'vm': vm, 'sc1b': sc1b, 'sc2': sc2, 'sc3': sc3}
     
     def get_labels(self, embed):
         if self.algo == "leiden":
@@ -147,7 +155,12 @@ class RLCluster(object):
         normalized_pca = self.pca_normalizer.normalize(self.pca_results)
 
         if self.eval_mode:
-            results = self.evaluate(best_labels)
+            results = evaluate(
+                cnv_data=self.cnv_data, 
+                true_labels=self.true_labels, 
+                pred_labels=best_labels, 
+                tree_method=self.tree_method,
+                real_tree=self.true_tree)
             df = pd.DataFrame.from_dict({k: [v] for k, v in results.items()})
             df.to_csv(os.path.join(self.log_dir, 'result.csv'))
         
@@ -199,7 +212,13 @@ class RLCluster(object):
             r = self.get_reward(embed, labels)
 
             if self.eval_mode:
-                results = self.evaluate(labels)
+                # results = self.evaluate(labels)
+                results = evaluate(
+                    cnv_data=self.cnv_data, 
+                    true_labels=self.true_labels, 
+                    pred_labels=labels, 
+                    tree_method=self.tree_method,
+                    real_tree=self.true_tree)
                 for k, v in results.items():
                     self.logger.add_scalar(f'eval/{k}', v, e)
 

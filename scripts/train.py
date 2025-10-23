@@ -2,9 +2,16 @@ import torch
 import argparse
 from tqdm import tqdm
 
-from net import *
-from utils import *
-from cluster import *
+import sys
+sys.path.append('/home/ubuntu/duxinghao/clone/rl_leiden')
+
+from src.net import *
+from src.utils import *
+from src.cluster import *
+
+from src.distance import l1_distance, l2_distance
+from src.maketree import maketree, get_parent_child_pairs
+from src.plot import drawtree
 
 import warnings
 from scipy.sparse import SparseEfficiencyWarning
@@ -13,7 +20,9 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--algo', type=str, default='leiden')
+    parser.add_argument('--cluster_algo', type=str, default='leiden')
+    parser.add_argument('--maketree_algo', type=str, default='mst', help='Alg for making tree: upgma/mst/nj')
+    parser.add_argument('--reward', type=str, default='sii', help='Choice of Reward Function: sii/chi/dbi')
     parser.add_argument('--data_dir', type=str, default='../data/data_large2/')
     parser.add_argument('--dataset_id', type=int, default=0)
     parser.add_argument('--output_dir', type=str, default='results_leiden/')
@@ -42,11 +51,11 @@ if __name__ == "__main__":
     set_seed_everywhere(args.seed)
     meta = None
     if args.eval_mode:
-        data, c2cl, dataset_name = load_data(args.data_dir, args.dataset_id)
-        data = [data]
+        data, c2cl, dataset_name, gt_tree, cl2idx = load_data(args.data_dir, args.dataset_id)
+        # data = [data]
     else:
         data, c2cl, dataset_name, meta = load_real_data(args.data_dir, args.data_name, remove_no_epi=args.remove_non_epi)
-    log_dir = os.path.join(args.output_dir, args.algo, dataset_name)
+    log_dir = os.path.join(args.output_dir, args.cluster_algo, dataset_name)
     
     # init model & optimizer
     data_size = data.values.shape[0]
@@ -55,7 +64,7 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # get algorithm
-    rl_cluster = RLCluster(args.algo, data, c2cl, args.n_components, model, optimizer, log_dir, device, eval=args.eval_mode, meta=meta, meta_col=args.meta_col)
+    rl_cluster = RLCluster(args.cluster_algo, args.maketree_algo, data, c2cl, gt_tree, cl2idx, args.n_components, model, optimizer, log_dir, device, eval=args.eval_mode, meta=meta, meta_col=args.meta_col, reward=args.reward)
 
     # learn
     pred_labels = rl_cluster.learn(args.bc_epochs, args.rl_epochs, args.samples_per_epoch, args.epsilon)
@@ -66,7 +75,7 @@ if __name__ == "__main__":
     label_df = pd.DataFrame({'cell':data.index, 'cluster':pred_labels})
     label_df.to_csv(os.path.join(log_dir, 'cell2cluster.csv'), index=None)
     # make tree
-    root = maketree(cnv=data.values, labels=pred_labels, dist_func=l2_distance)
+    root = maketree(cnv=data.values, labels=pred_labels, dist_func=l2_distance, method=args.maketree_algo)
     # showtree(root)
     tree_df = pd.DataFrame(data=get_parent_child_pairs(root), columns=['parent', 'son'])
     tree_df.to_csv(os.path.join(log_dir, 'tree_path.csv'), index=None)

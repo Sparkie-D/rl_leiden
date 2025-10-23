@@ -1,13 +1,14 @@
 import argparse
 import numpy as np
 
-from utils import cal1B, cal2, cal3, load_data
+from src.metrics import cal1B, cal2_modified, cal3
+from src.utils import load_data
 from sklearn.metrics import adjusted_rand_score as ari_score
 from sklearn.metrics.cluster import normalized_mutual_info_score as nmi_score
 from sklearn.metrics import v_measure_score as vm_score
 
 
-def evaluate(cnv_data, true_labels, pred_labels):
+def evaluate(cnv_data, true_labels, pred_labels, tree_method='mst', real_tree=None, pred_tree=None):
     """
     Evaluate clustering performance using various metrics.
 
@@ -23,9 +24,10 @@ def evaluate(cnv_data, true_labels, pred_labels):
     ari = ari_score(true_labels, pred_labels)
     vm = vm_score(true_labels, pred_labels)
     sc1b = cal1B(truth=len(set(true_labels)), pred=len(set(pred_labels)))
-    sc2 = cal2(truth=true_labels, pred=pred_labels)
-    sc3 = cal3(truth=true_labels, pred=pred_labels, cnv=cnv_data)
-    return {'nmi': nmi, 'ari': ari, 'vm': vm, 'sc1b': sc1b, 'sc2': sc2, 'sc3': sc3}
+    # sc2 = cal2(truth=true_labels, pred=pred_labels)
+    sc2 = cal2_modified(truth=true_labels, pred=pred_labels)
+    sc3 = cal3(truth=true_labels, pred=pred_labels, cnv=cnv_data, tree_method=tree_method, real_tree=real_tree, pred_tree=pred_tree)
+    return {'nmi': nmi, 'ari': ari, 'vm': vm, 'sc1b': sc1b,'sc2': sc2, 'sc3': sc3}
 
 
 def get_args():

@@ -4,9 +4,9 @@ import networkx as nx
 import os
 import argparse
 
-from net import *
-from utils import *
-from cluster import *
+from src.net import *
+from src.utils import *
+from src.cluster import *
 
 
 def get_args():

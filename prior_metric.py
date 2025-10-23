@@ -7,9 +7,9 @@ import argparse
 from joblib import Parallel, delayed
 from collections import defaultdict
 
-from net import *
-from utils import *
-from cluster import *
+from src.net import *
+from src.utils import *
+from src.cluster import *
 
 def save_dict(dic, savepath):
     dic_str = {str(k):dic[k] for k in dic.keys()}
